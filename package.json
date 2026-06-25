@@ -1,8 +1,8 @@
 {
   "name": "minimax-usage",
   "displayName": "MiniMax Usage",
-  "description": "Show your MiniMax Token Plan quota (5-hour and weekly) in the VS Code status bar, sidebar, and a detail dashboard.",
-  "version": "0.1.0",
+  "description": "Show your MiniMax Token Plan quota (5-hour and weekly) in the VS Code status bar and a detail dashboard with a usage history chart.",
+  "version": "0.3.1",
   "publisher": "Hukilow",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -64,11 +64,6 @@
         "command": "minimaxUsage.toggleStatusBar",
         "title": "MiniMax Usage: Toggle Status Bar",
         "category": "Minimax Usage"
-      },
-      {
-        "command": "minimaxUsage.toggleSidebar",
-        "title": "MiniMax Usage: Toggle Sidebar View",
-        "category": "Minimax Usage"
       }
     ],
     "configuration": {
@@ -115,11 +110,6 @@
           "default": 100,
           "description": "Maximum number of historical samples to retain for charts."
         },
-        "minimaxUsage.showSidebar": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show the MiniMax Usage view in the Activity Bar (bottom)."
-        },
         "minimaxUsage.debug": {
           "type": "boolean",
           "default": false,
@@ -127,53 +117,12 @@
         }
       }
     },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "minimaxUsage.sidebar",
-          "title": "Minimax Usage",
-          "icon": "$(pulse)",
-          "when": "config.minimaxUsage.showSidebar"
-        }
-      ]
-    },
-    "views": {
-      "minimaxUsage.sidebar": [
-        {
-          "id": "minimaxUsage.view",
-          "name": "Usage",
-          "when": "config.minimaxUsage.showSidebar"
-        }
-      ]
-    },
+    "viewsContainers": {},
+    "views": {},
     "menus": {
-      "view/title": [
-        {
-          "command": "minimaxUsage.refresh",
-          "when": "view == minimaxUsage.view",
-          "group": "navigation"
-        },
-        {
-          "command": "minimaxUsage.openDashboard",
-          "when": "view == minimaxUsage.view",
-          "group": "navigation"
-        },
-        {
-          "command": "minimaxUsage.openBilling",
-          "when": "view == minimaxUsage.view",
-          "group": "navigation"
-        }
-      ],
-      "view/item/context": [
-        {
-          "command": "minimaxUsage.openDashboard",
-          "when": "view == minimaxUsage.view && viewItem == model",
-          "group": "inline"
-        }
-      ],
       "commandPalette": [
         {
-          "command": "minimaxUsage.toggleSidebar",
+          "command": "minimaxUsage.toggleStatusBar",
           "when": "false"
         }
       ]

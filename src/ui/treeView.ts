@@ -196,14 +196,29 @@ function tooltipFor(m: NormalizedModelQuota): string {
   ].join('\n');
 }
 
-/** Registers the tree view in the MiniMax Usage sidebar. */
+/**
+ * Registers the tree views that render MiniMax Usage data.
+ *
+ * We register the same provider against TWO views for resilience:
+ *   1. `minimaxUsage.view` — primary, lives in the custom Activity Bar
+ *      container `minimaxUsage.sidebar` (the dedicated "Minimax Usage"
+ *      icon shown in the left bar).
+ *   2. `minimaxUsage.explorerView` — fallback that appears as a section
+ *      inside the built-in Explorer container. This guarantees the user
+ *      can always find the view somewhere, even if a host environment
+ *      refuses to render the custom container (e.g. due to icon
+ *      resolution quirks, theme issues, or Activity Bar constraints).
+ */
 export function registerTreeView(): { provider: QuotaTreeProvider; dispose: () => void } {
   const provider = new QuotaTreeProvider();
-  const view = window.createTreeView('minimaxUsage.view', { treeDataProvider: provider });
+  const views = [
+    window.createTreeView('minimaxUsage.view', { treeDataProvider: provider }),
+    window.createTreeView('minimaxUsage.explorerView', { treeDataProvider: provider }),
+  ];
   return {
     provider,
     dispose: () => {
-      view.dispose();
+      for (const v of views) v.dispose();
     },
   };
 }

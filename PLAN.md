@@ -18,7 +18,7 @@ Authorization: Bearer <SUBSCRIPTION_KEY>
 Content-Type: application/json
 ```
 
-> The key is the **Subscription Key** (NOT a pay-as-you-go Open Platform API Key). Users get one per Team at [Billing → Token Plan](https://platform.minimax.io/user-center/payment/token-plan).
+> The key is the **Subscription Key** (NOT a pay-as-you-go Open Platform API Key). Users get one per Team at [Billing → Token Plan](https://platform.minimax.io/console/plan).
 
 ### 1.2 Real Response (verified with user's key)
 
@@ -181,7 +181,7 @@ Full dashboard with:
 - **History graph** — line chart (5h % over time) + secondary bar chart (weekly % over time).
   - Library: **hand-rolled `<canvas>` chart** (`src/webview/chart.ts`) — ~3KB, zero deps. uPlot was the original pick but a vanilla canvas is a better fit for the "zero deps" profile and keeps the webview bundle under 50KB minified.
 - **History source:** in-memory ring buffer (default 100 samples). The API is point-in-time only; history is built by polling and caching locally (same approach as `claudemeter`).
-- "Open Billing" button → [platform.minimax.io/user-center/payment/token-plan](https://platform.minimax.io/user-center/payment/token-plan).
+- "Open Billing" button → [[[platform.minimax.io/console/plan](https://platform.minimax.io/console/plan)](https://platform.minimax.io/console/usage)](https://platform.minimax.io/console/usage).
 - "Refresh now" button.
 - Last-fetched timestamp + error banner if the last fetch failed.
 

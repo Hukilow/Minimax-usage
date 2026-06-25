@@ -37,8 +37,9 @@ describe('QuotaClient', () => {
     expect(() => new QuotaClient({ apiKey: '   ' })).toThrow(ApiError);
   });
 
-  it('throws when region is disabled', () => {
-    expect(() => new QuotaClient({ apiKey: 'sk-test', region: 'cn' })).toThrow(/not enabled/i);
+  it('throws on unknown region', () => {
+    // @ts-expect-error — intentionally invalid region to exercise the guard
+    expect(() => new QuotaClient({ apiKey: 'sk-test', region: 'unknown' })).toThrow(/unknown region/i);
   });
 
   it('maps 401/403 to auth error', async () => {

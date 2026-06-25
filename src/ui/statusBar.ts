@@ -2,6 +2,7 @@ import type { ExtensionContext, StatusBarItem, Command } from 'vscode';
 import { StatusBarAlignment, ThemeColor, window } from 'vscode';
 import type { QuotaState } from '../api/quota.js';
 import { QuotaStatus } from '../api/types.js';
+import type { NormalizedModelQuota } from '../api/types.js';
 import { formatDuration, formatLocalTime, formatPercent, liveRemainsMs } from '../utils/time.js';
 
 export type StatusBarMode = 'compact' | 'split';
@@ -93,13 +94,13 @@ export class StatusBar {
     // Aggregate across models (worst-case used %).
     const agg = aggregate(state.perModel);
 
-    // 5h item
-    this.item5h.text = this.formatLine('$(pulse) 5h', agg.interval);
+    // 5h item — cap countdown at 5h (the window cannot reset later than that).
+    this.item5h.text = this.formatLine('$(pulse) 5h', agg.interval, 5 * 60 * 60 * 1000);
     this.item5h.tooltip = this.tooltipFor('5-hour window', agg.interval, state);
     this.applyTierStyle(this.item5h, agg.interval.usedPercent, agg.interval.status, this.opts.warningThreshold, this.opts.errorThreshold);
 
-    // Weekly item
-    this.itemWk.text = this.formatLine('$(history) Wk', agg.weekly);
+    // Weekly item — cap countdown at 7 days.
+    this.itemWk.text = this.formatLine('$(history) Wk', agg.weekly, 7 * 24 * 60 * 60 * 1000);
     this.itemWk.tooltip = this.tooltipFor('Weekly window', agg.weekly, state);
     this.applyTierStyle(this.itemWk, agg.weekly.usedPercent, agg.weekly.status, this.opts.warningThreshold, this.opts.errorThreshold);
   }
@@ -111,10 +112,21 @@ export class StatusBar {
 
   // --- formatting ----------------------------------------------------------
 
-  private formatLine(prefix: string, w: { usedPercent: number; remainingPercent: number; status: number; endTime?: number; remainsMs?: number }): string {
+  private formatLine(
+    prefix: string,
+    w: { usedPercent: number; remainingPercent: number; status: number; endTime?: number; remainsMs?: number },
+    maxMs?: number,
+  ): string {
     const pct = formatPercent(w.usedPercent);
     const tier = dots(w.usedPercent);
-    const cd = liveRemainsMs(w.endTime);
+    // Defensive clamp: a rolling 5h window cannot have more than 5h until
+    // reset, and a weekly window cannot have more than 7 days. The upstream
+    // API can return stale or unit-mismatched endTime values; capping here
+    // guarantees we never display an impossible countdown.
+    let cd = liveRemainsMs(w.endTime);
+    if (cd !== undefined && maxMs !== undefined && cd > maxMs) {
+      cd = maxMs;
+    }
     if (this.mode === 'split' && cd && cd > 0) {
       return `${prefix} ${tier} ${pct} $(clock) ${formatDuration(cd)}`;
     }
@@ -136,6 +148,8 @@ export class StatusBar {
       `Last fetch: ${lastOk}`,
     ].join('\n');
   }
+
+
 
   private tooltipNoData(label: string, state: QuotaState): string {
     if (!state.hasKey) return 'MiniMax Usage — click to set your API key';
@@ -177,43 +191,72 @@ export class StatusBar {
 
 // ---- pure helpers (kept here so they're easy to test) ---------------------
 
-function aggregate(perModel: NonNullable<QuotaState['perModel']>) {
+/** Exported for testing only — the multi-model aggregation logic. */
+export function aggregate(perModel: NonNullable<QuotaState['perModel']>) {
   // Worst-case (highest usage) across all models. Status is the "most
   // severe" — exhausted wins, then limited, then unlimited.
+  // The endTime/remainingPercent MUST come from the same model that gave us
+  // the worst-case used% — otherwise the countdown and the % can disagree
+  // (e.g. a "20% used" model paired with a far-future reset timestamp
+  // from a sibling model would render "resets in 6h 30m" for a 5h window,
+  // which is impossible). We pick the worst-case model first, then mirror
+  // its window fields.
   let intervalUsed = 0;
   let weeklyUsed = 0;
-  let intervalRemaining = 100;
-  let weeklyRemaining = 100;
   let intervalStatus: number = QuotaStatus.Unlimited;
   let weeklyStatus: number = QuotaStatus.Unlimited;
-  let intervalEnd: number | undefined;
-  let weeklyEnd: number | undefined;
+  let intervalBest: NormalizedModelQuota['interval'] | undefined;
+  let weeklyBest: NormalizedModelQuota['weekly'] | undefined;
 
   for (const m of perModel) {
-    intervalUsed = Math.max(intervalUsed, m.interval.usedPercent);
-    weeklyUsed = Math.max(weeklyUsed, m.weekly.usedPercent);
-    intervalRemaining = Math.min(intervalRemaining, m.interval.remainingPercent);
-    weeklyRemaining = Math.min(weeklyRemaining, m.weekly.remainingPercent);
-    intervalStatus = worse(intervalStatus, m.interval.status);
-    weeklyStatus = worse(weeklyStatus, m.weekly.status);
-    if (m.interval.endTime !== undefined) intervalEnd = m.interval.endTime;
-    if (m.weekly.endTime !== undefined) weeklyEnd = m.weekly.endTime;
+    if (m.interval.usedPercent >= intervalUsed) {
+      // Tie-break: prefer the more severe status, then the earliest reset
+      // (so the countdown reflects the soonest model).
+      const earlierEnd =
+        intervalBest?.endTime !== undefined && m.interval.endTime !== undefined
+          ? m.interval.endTime < intervalBest.endTime
+          : m.interval.endTime !== undefined;
+      if (m.interval.usedPercent > intervalUsed || earlierEnd || intervalBest === undefined) {
+        intervalUsed = m.interval.usedPercent;
+        intervalBest = m.interval;
+        intervalStatus = worse(intervalStatus, m.interval.status);
+      } else if (intervalBest === undefined) {
+        intervalBest = m.interval;
+      }
+    }
+    if (m.weekly.usedPercent >= weeklyUsed) {
+      const earlierEnd =
+        weeklyBest?.endTime !== undefined && m.weekly.endTime !== undefined
+          ? m.weekly.endTime < weeklyBest.endTime
+          : m.weekly.endTime !== undefined;
+      if (m.weekly.usedPercent > weeklyUsed || earlierEnd || weeklyBest === undefined) {
+        weeklyUsed = m.weekly.usedPercent;
+        weeklyBest = m.weekly;
+        weeklyStatus = worse(weeklyStatus, m.weekly.status);
+      } else if (weeklyBest === undefined) {
+        weeklyBest = m.weekly;
+      }
+    }
   }
+
+  // Fall back to any model if nothing matched (shouldn't happen, but be safe).
+  if (!intervalBest) intervalBest = perModel[0]!.interval;
+  if (!weeklyBest) weeklyBest = perModel[0]!.weekly;
 
   return {
     interval: {
       usedPercent: intervalUsed,
-      remainingPercent: intervalRemaining,
+      remainingPercent: intervalBest.remainingPercent,
       status: intervalStatus,
-      endTime: intervalEnd,
-      remainsMs: liveRemainsMs(intervalEnd),
+      endTime: intervalBest.endTime,
+      remainsMs: liveRemainsMs(intervalBest.endTime),
     },
     weekly: {
       usedPercent: weeklyUsed,
-      remainingPercent: weeklyRemaining,
+      remainingPercent: weeklyBest.remainingPercent,
       status: weeklyStatus,
-      endTime: weeklyEnd,
-      remainsMs: liveRemainsMs(weeklyEnd),
+      endTime: weeklyBest.endTime,
+      remainsMs: liveRemainsMs(weeklyBest.endTime),
     },
   };
 }

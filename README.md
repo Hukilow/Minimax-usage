@@ -1,6 +1,6 @@
 # MiniMax Usage
 
-> Show your **MiniMax Token Plan** quota (5-hour and weekly) right inside VS Code — status bar, sidebar, and a detail dashboard with a usage history chart.
+> Show your **MiniMax Token Plan** quota (5-hour and weekly) right inside VS Code — status bar and a detail dashboard with a usage history chart.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.96-blue)](https://code.visualstudio.com/)
@@ -12,9 +12,6 @@
 ### Status bar (bottom-right)
 ![Status bar](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/status-bar.png)
 
-### Sidebar
-![Sidebar](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/sidebar.png)
-
 ### Detail dashboard
 ![Dashboard](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/dashboard.png)
 
@@ -23,11 +20,10 @@
 
 ---
 
-## ✨ Features
+##  Features
 
 - **Status bar (bottom-right):** live 5-hour and weekly **used %**, color-coded (green / yellow / red), with reset countdowns on hover.
-- **Sidebar view:** per-model rows (`general`, `video`, …) with quick access to refresh / dashboard / billing.
-- **Detail dashboard:** big usage bars, reset countdowns, **historical chart** of usage over time, auto-refreshing live countdowns.
+- **Detail dashboard:** big usage bars, reset countdowns, **historical chart** of usage over time, auto-refreshing live countdowns. Open it from the status bar or via **"MiniMax Usage: Open Usage Dashboard"**.
 - **Command palette:** `MiniMax Usage: Set API Key`, `Refresh Now`, `Open Usage Dashboard`, `Open Billing Page`, …
 - **Private by design:** API key in OS keychain (`SecretStorage`); no telemetry, no analytics, **zero runtime npm dependencies**.
 
@@ -37,7 +33,7 @@
 
 1. Install the **MiniMax Usage** extension from the VS Code Marketplace (search "MiniMax Usage" or run `ext install Hukilow.minimax-usage`).
 2. Open the Command Palette (`Ctrl+Shift+P` / `Cmd+Shift+P`).
-3. Run **`MiniMax Usage: Set API Key`** and paste your **Subscription Key** from [Billing → Token Plan](https://platform.minimax.io/user-center/payment/token-plan).
+3. Run **`MiniMax Usage: Set API Key`** and paste your **Subscription Key** from [Billing → Token Plan](https://platform.minimax.io/console/plan).
 4. The status bar should populate within a few seconds.
 
 > A **Subscription Key** is the Team-level key issued when you subscribe to MiniMax Token Plan. It is *not* the same as a pay-as-you-go Open Platform API key.
@@ -53,7 +49,6 @@
 | `minimaxUsage.warningThreshold` | `70` | Used-% at which the status bar turns yellow. |
 | `minimaxUsage.errorThreshold` | `90` | Used-% at which the status bar turns red. |
 | `minimaxUsage.historySampleLimit` | `100` | History ring-buffer size. |
-| `minimaxUsage.showSidebar` | `true` | Show sidebar container. |
 | `minimaxUsage.debug` | `false` | Verbose logs in Output channel. |
 
 ---
@@ -91,21 +86,6 @@ npm run watch            # in one terminal
 | `npm test` | Vitest unit tests. |
 | `npm run package` | Build + bundle + `vsce package` (produces `.vsix`). |
 
-### Regenerating screenshots
-
-```bash
-powershell -ExecutionPolicy Bypass -File scripts\make-screenshots.ps1
-```
-
-This rebuilds the four PNGs in `docs/screenshots/` (status-bar, sidebar, dashboard, settings). Replace them with real captures of the running extension when you have a clean setup.
-
-### Replacing the icon
-
-The Marketplace accepts PNG, JPG, GIF, BMP for the gallery image. The webview tab icon (used by `WebviewPanel.iconPath`) is stricter and only accepts **PNG**.
-
-- Drop your replacement at `media/icon.jpg` (any size).
-- Run `powershell -ExecutionPolicy Bypass -File scripts\convert-icon.ps1` — it produces a 128×128 `media/icon.png` (centered square crop + resize).
-- Re-run `npm run package` to see the new icon in the packaged `.vsix`.
 
 ### Project layout
 

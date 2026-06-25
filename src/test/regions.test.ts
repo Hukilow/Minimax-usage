@@ -2,12 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { Regions } from '../utils/regions.js';
 
 describe('Regions', () => {
-  it('has global region enabled', () => {
-    expect(Regions.global.enabled).toBe(true);
+  it('has the global region configured with an HTTPS API URL', () => {
     expect(Regions.global.apiBaseUrl).toMatch(/^https:/);
-  });
-
-  it('has CN region disabled in v1', () => {
-    expect(Regions.cn.enabled).toBe(false);
+    expect(Regions.global.billingUrl).toMatch(/^https:/);
+    expect(Regions.global.label).toBe('Global');
   });
 });

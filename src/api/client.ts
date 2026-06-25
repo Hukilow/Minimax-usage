@@ -44,7 +44,7 @@ export class ApiError extends Error {
 export interface QuotaClientOptions {
   /** Subscription key (Bearer token). */
   apiKey: string;
-  /** Region: 'global' uses api.minimax.io, 'cn' would use api.MiniMax.cn (currently disabled). */
+  /** Region: 'global' uses api.minimax.io (the only live-verified endpoint). */
   region?: keyof typeof Regions;
   /** Total request timeout in ms. Defaults to 15s. */
   timeoutMs?: number;
@@ -80,9 +80,6 @@ export class QuotaClient {
     const cfg = Regions[region];
     if (!cfg) {
       throw new ApiError('api', `Unknown region: ${String(region)}`);
-    }
-    if (!cfg.enabled) {
-      throw new ApiError('api', `Region "${region}" is not enabled in this build.`);
     }
     this.baseUrl = cfg.apiBaseUrl;
   }

@@ -22,9 +22,6 @@ export interface CommandDeps {
   /** Reads/writes the current status bar mode. */
   getStatusBarMode: () => StatusBarMode;
   setStatusBarMode: (m: StatusBarMode) => void;
-  /** Reads/writes the sidebar visibility. */
-  getSidebarVisible: () => boolean;
-  setSidebarVisible: (v: boolean) => void;
 }
 
 export function registerCommands(deps: CommandDeps): Disposable[] {
@@ -35,7 +32,6 @@ export function registerCommands(deps: CommandDeps): Disposable[] {
     commands.registerCommand('minimaxUsage.openDashboard', () => openDashboard(deps)),
     commands.registerCommand('minimaxUsage.openBilling', () => openBilling()),
     commands.registerCommand('minimaxUsage.toggleStatusBar', () => toggleStatusBar(deps)),
-    commands.registerCommand('minimaxUsage.toggleSidebar', () => toggleSidebar(deps)),
   ];
 }
 
@@ -94,12 +90,4 @@ function toggleStatusBar(deps: CommandDeps): void {
   deps.setStatusBarMode(next);
   deps.statusBar.setMode(next);
   deps.logger.info(`status bar mode = ${next}`);
-}
-
-function toggleSidebar(deps: CommandDeps): void {
-  const next = !deps.getSidebarVisible();
-  deps.setSidebarVisible(next);
-  void window.showInformationMessage(
-    `MiniMax Usage sidebar: ${next ? 'visible (reload window to apply)' : 'hidden (reload window to apply)'}`,
-  );
 }

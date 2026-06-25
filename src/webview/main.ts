@@ -9,6 +9,7 @@
 
 import { drawLineChart } from './chart.js';
 import type { DashboardSnapshot } from '../ui/detailsWebview.js';
+import { tierFor } from '../utils/tier.js';
 
 declare function acquireVsCodeApi(): {
   postMessage(msg: unknown): void;
@@ -165,12 +166,6 @@ function bar(
       </div>
       <div class="bar-meta">${remaining}% remaining · resets in <strong>${escapeHtml(w.remainsLabel)}</strong></div>
     </div>`;
-}
-
-function tierFor(pct: number, t: { warning: number; error: number }): 'ok' | 'warn' | 'err' {
-  if (pct < t.error) return 'err';
-  if (pct < t.warning) return 'warn';
-  return 'ok';
 }
 
 function colorFor(model: string): string {

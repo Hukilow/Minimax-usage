@@ -5,6 +5,19 @@
 
 import { EventEmitter } from 'node:events';
 
+// Hoisted above all other declarations so the `export const EventEmitter =
+// EventEmitter_Node` alias further down never hits a temporal-dead-zone.
+class EventEmitter_Node {
+  private listeners: Array<(e: unknown) => void> = [];
+  readonly event = (listener: (e: unknown) => void) => {
+    this.listeners.push(listener);
+    return { dispose: () => {} };
+  };
+  fire(e: unknown): void {
+    for (const l of this.listeners) l(e);
+  }
+}
+
 export class Uri {
   static parse(value: string): Uri {
     return new Uri(value);
@@ -115,16 +128,6 @@ export interface TreeDataProvider<T> {
   onDidChangeTreeData?: unknown;
 }
 
-class EventEmitter_Node {
-  private listeners: Array<(e: unknown) => void> = [];
-  readonly event = (listener: (e: unknown) => void) => {
-    this.listeners.push(listener);
-    return { dispose: () => {} };
-  };
-  fire(e: unknown): void {
-    for (const l of this.listeners) l(e);
-  }
-}
 
 export class OutputChannel {
   private buf: string[] = [];
@@ -148,11 +151,19 @@ export class StatusBarItem {
   tooltip?: string;
   backgroundColor?: unknown;
   color?: unknown;
-  command?: { title: string; command: string };
+  command?: Command;
   name = '';
   show(): void {}
   hide(): void {}
   dispose(): void {}
+}
+
+/** Mirrors the real `Command` shape — minimal stub for the type-only import. */
+export interface Command {
+  title: string;
+  command: string;
+  tooltip?: string;
+  arguments?: unknown[];
 }
 
 export class WebviewPanel {
