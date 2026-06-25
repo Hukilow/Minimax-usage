@@ -126,6 +126,42 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
 ---
 
-## 📄 License
+## � Publishing to the VS Code Marketplace
+
+The release workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml) builds, signs, and publishes the extension whenever a `v*` tag is pushed.
+
+To enable automatic publishing:
+
+1. **Get a Marketplace token** from Azure DevOps:
+   [User settings → Personal access tokens](https://dev.azure.com/_usersSettings/tokens) → **+ New Token**.
+   - **Scopes:** Custom defined → **Marketplace** → **Manage**.
+   - **Expiration:** 90 days (rotate before expiry).
+2. **Add it as a repository secret** on GitHub:
+   - Go to your repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
+   - **Name:** `VSCE_PAT`
+   - **Value:** the token from step 1.
+3. **Cut a release** (see the [release-manager agent](.github/agents/release-manager.agent.md) / `cut-release` prompt for the full checklist):
+   ```bash
+   npm version patch   # or minor / major
+   git push --follow-tags
+   ```
+4. Watch the **Actions** tab. The workflow will:
+   - build + package the `.vsix`
+   - run `vsce publish` (using `VSCE_PAT`)
+   - create a GitHub release with the `.vsix` attached
+
+> If `VSCE_PAT` is not set, the publish step is skipped with a friendly notice and the GitHub release still runs.
+
+### Replacing the icon
+
+The Marketplace accepts PNG, JPG, GIF, BMP for the gallery image. The webview tab icon (used by `WebviewPanel.iconPath`) is stricter and only accepts **PNG**.
+
+- Drop your replacement at `media/icon.jpg` (any size).
+- Run `powershell -ExecutionPolicy Bypass -File scripts/convert-icon.ps1` — it produces a 128×128 `media/icon.png` (centered square crop + resize).
+- Re-run `npm run package` to see the new icon in the packaged `.vsix`.
+
+---
+
+## �📄 License
 
 [MIT](LICENSE) © 2026 Hukilow

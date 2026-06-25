@@ -43,10 +43,10 @@ jobs:
       - name: Build (webview)
         run: npm run build:web
 
+      # Plain CI does not need VSCE_PAT. We just build the .vsix and upload
+      # it as a build artifact for inspection.
       - name: Package VSIX
-        run: npm run package
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce package
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4

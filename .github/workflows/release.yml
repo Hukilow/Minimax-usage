@@ -13,6 +13,7 @@ jobs:
     name: Build & publish VSIX
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,7 +35,23 @@ jobs:
           npm run build:web
 
       - name: Package VSIX
-        run: npx --yes vsce package
+        run: npx --yes @vscode/vsce package
+
+      # Publish to the VS Code Marketplace if VSCE_PAT is configured on the
+      # repository. If the secret is missing, we log a notice and skip the
+      # publish step — the GitHub release below still runs.
+      - name: Publish to VS Code Marketplace
+        if: ${{ env.VSCE_PAT != '' }}
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: npx --yes @vscode/vsce publish --pat "$VSCE_PAT"
+
+      - name: Notify (no VSCE_PAT configured)
+        if: ${{ env.VSCE_PAT == '' }}
+        run: |
+          echo "::notice::VSCE_PAT secret is not set — skipping Marketplace publish."
+          echo "  To enable: Settings → Secrets and variables → Actions → New repository secret."
+          echo "  Name: VSCE_PAT  •  Value: <your Azure DevOps Marketplace token>"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
