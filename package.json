@@ -1,0 +1,205 @@
+{
+  "name": "minimax-usage",
+  "displayName": "MiniMax Usage",
+  "description": "Show your MiniMax Token Plan quota (5-hour and weekly) in the VS Code status bar, sidebar, and a detail dashboard.",
+  "version": "0.1.0",
+  "publisher": "Hukilow",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Other",
+    "Visualization"
+  ],
+  "keywords": [
+    "minimax",
+    "token-plan",
+    "quota",
+    "usage",
+    "status-bar",
+    "m3"
+  ],
+  "homepage": "https://github.com/Hukilow/minimax-usage",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hukilow/minimax-usage.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Hukilow/minimax-usage/issues"
+  },
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "minimaxUsage.setApiKey",
+        "title": "MiniMax Usage: Set API Key",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.clearApiKey",
+        "title": "MiniMax Usage: Clear API Key",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.refresh",
+        "title": "MiniMax Usage: Refresh Now",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.openDashboard",
+        "title": "MiniMax Usage: Open Usage Dashboard",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.openBilling",
+        "title": "MiniMax Usage: Open Billing Page",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.toggleStatusBar",
+        "title": "MiniMax Usage: Toggle Status Bar",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.toggleSidebar",
+        "title": "MiniMax Usage: Toggle Sidebar View",
+        "category": "Minimax Usage"
+      }
+    ],
+    "configuration": {
+      "title": "MiniMax Usage",
+      "properties": {
+        "minimaxUsage.refreshIntervalSeconds": {
+          "type": "number",
+          "minimum": 30,
+          "maximum": 600,
+          "default": 60,
+          "description": "How often (seconds) to poll the MiniMax Token Plan API."
+        },
+        "minimaxUsage.statusBarDisplayMode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "split"
+          ],
+          "enumDescriptions": [
+            "Two compact panels with no inline countdown (default).",
+            "Single combined panel with inline reset countdown."
+          ],
+          "default": "compact",
+          "description": "Status bar shape."
+        },
+        "minimaxUsage.warningThreshold": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 30,
+          "description": "Remaining-% at which the status bar turns yellow."
+        },
+        "minimaxUsage.errorThreshold": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "Remaining-% at which the status bar turns red and shows an alert icon."
+        },
+        "minimaxUsage.historySampleLimit": {
+          "type": "number",
+          "minimum": 20,
+          "maximum": 2000,
+          "default": 100,
+          "description": "Maximum number of historical samples to retain for charts."
+        },
+        "minimaxUsage.showSidebar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the MiniMax Usage view in the Activity Bar (bottom)."
+        },
+        "minimaxUsage.debug": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose logging to the Output channel."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "minimaxUsage.sidebar",
+          "title": "Minimax Usage",
+          "icon": "$(pulse)",
+          "when": "config.minimaxUsage.showSidebar"
+        }
+      ]
+    },
+    "views": {
+      "minimaxUsage.sidebar": [
+        {
+          "id": "minimaxUsage.view",
+          "name": "Usage",
+          "when": "config.minimaxUsage.showSidebar"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "minimaxUsage.refresh",
+          "when": "view == minimaxUsage.view",
+          "group": "navigation"
+        },
+        {
+          "command": "minimaxUsage.openDashboard",
+          "when": "view == minimaxUsage.view",
+          "group": "navigation"
+        },
+        {
+          "command": "minimaxUsage.openBilling",
+          "when": "view == minimaxUsage.view",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "minimaxUsage.openDashboard",
+          "when": "view == minimaxUsage.view && viewItem == model",
+          "group": "inline"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "minimaxUsage.toggleSidebar",
+          "when": "false"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "build:web": "node esbuild.web.mjs",
+    "watch": "node esbuild.config.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint \"src/**/*.ts\"",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "package": "npm run build && npm run build:web && vsce package",
+    "package:dry": "vsce package --no-dependencies",
+    "clean": "rimraf dist out .vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/vscode": "^1.96.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.24.0",
+    "eslint": "^9.17.0",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.9"
+  }
+}
