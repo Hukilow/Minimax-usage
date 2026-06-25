@@ -154,19 +154,19 @@ export interface DashboardSnapshot {
   perModel: Array<{
     model_name: string;
     interval: {
+      usedPercent: number;
       remainingPercent: number;
       status: number;
       statusLabel: string;
       endTime?: string;
-      remainsMs?: number;
       remainsLabel: string;
     };
     weekly: {
+      usedPercent: number;
       remainingPercent: number;
       status: number;
       statusLabel: string;
       endTime?: string;
-      remainsMs?: number;
       remainsLabel: string;
     };
   }>;
@@ -187,8 +187,8 @@ function serializeState(state: QuotaState): DashboardSnapshot {
 
   const perModel = (state.perModel ?? []).map((m) => ({
     model_name: m.model_name,
-    interval: serializeWindow(m.interval.remainingPercent, m.interval.status, m.interval.endTime, m.interval.remainsMs),
-    weekly: serializeWindow(m.weekly.remainingPercent, m.weekly.status, m.weekly.endTime, m.weekly.remainsMs),
+    interval: serializeWindow(m.interval.usedPercent, m.interval.remainingPercent, m.interval.status, m.interval.endTime),
+    weekly: serializeWindow(m.weekly.usedPercent, m.weekly.remainingPercent, m.weekly.status, m.weekly.endTime),
   }));
 
   const history: DashboardSnapshot['history'] = {
@@ -204,8 +204,8 @@ function serializeState(state: QuotaState): DashboardSnapshot {
         history.series.push({
           model,
           window: 'interval',
-          values: state.history.map((s: { perModel: Record<string, { interval: { remainingPercent: number } }> }) =>
-            s.perModel[model]?.interval.remainingPercent ?? Number.NaN,
+          values: state.history.map((s: { perModel: Record<string, { interval: { usedPercent: number } }> }) =>
+            s.perModel[model]?.interval.usedPercent ?? Number.NaN,
           ),
         });
       }
@@ -215,8 +215,8 @@ function serializeState(state: QuotaState): DashboardSnapshot {
         history.series.push({
           model,
           window: 'weekly',
-          values: state.history.map((s: { perModel: Record<string, { weekly: { remainingPercent: number } }> }) =>
-            s.perModel[model]?.weekly.remainingPercent ?? Number.NaN,
+          values: state.history.map((s: { perModel: Record<string, { weekly: { usedPercent: number } }> }) =>
+            s.perModel[model]?.weekly.usedPercent ?? Number.NaN,
           ),
         });
       }
@@ -238,18 +238,23 @@ function serializeState(state: QuotaState): DashboardSnapshot {
       label: Regions.global.label,
       billingUrl: Regions.global.billingUrl,
     },
-    thresholds: { warning: 30, error: 10 },
+    thresholds: { warning: 70, error: 90 },
   };
 }
 
-function serializeWindow(remainingPercent: number, status: number, endTime?: number, remainsMs?: number): DashboardSnapshot['perModel'][number]['interval'] {
+function serializeWindow(
+  usedPercent: number,
+  remainingPercent: number,
+  status: number,
+  endTime?: number,
+): DashboardSnapshot['perModel'][number]['interval'] {
   return {
+    usedPercent,
     remainingPercent,
     status,
     statusLabel: statusLabel(status),
     endTime: endTime ? new Date(endTime).toISOString() : undefined,
-    remainsMs,
-    remainsLabel: formatRemains(remainsMs),
+    remainsLabel: formatRemains(endTime),
   };
 }
 
@@ -259,8 +264,10 @@ function statusLabel(s: number): string {
   return 'limited';
 }
 
-function formatRemains(ms: number | undefined): string {
-  if (!ms || ms <= 0) return '—';
+function formatRemains(endTime: number | undefined): string {
+  if (!endTime) return '—';
+  const ms = endTime - Date.now();
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
   const totalSeconds = Math.floor(ms / 1000);
   const days = Math.floor(totalSeconds / 86_400);
   const hours = Math.floor((totalSeconds % 86_400) / 3_600);

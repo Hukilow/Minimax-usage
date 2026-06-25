@@ -1,7 +1,7 @@
 /**
  * Tiny hand-rolled line chart on a <canvas>. Designed for the dashboard:
  * - one or more series (one per model)
- * - y-axis 0..100 (% remaining)
+ * - y-axis 0..100 (% used)
  * - x-axis = timestamps (rendered as HH:MM)
  *
  * No deps, no DOM. Just pixels. Works in any webview with a 2D context.

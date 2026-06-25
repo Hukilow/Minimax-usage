@@ -41,6 +41,18 @@ window.addEventListener('message', (e: MessageEvent) => {
   }
 });
 
+// Tell the extension we're alive and ready to receive state. Without this,
+// the extension's `onDidReceiveMessage('ready')` handler never fires and the
+// webview shows the "Loading…" placeholder until the user clicks Refresh.
+vscode.postMessage({ type: 'ready' });
+
+// Refresh the live countdowns every minute so the dashboard stays accurate
+// without requiring the user to click Refresh.
+setInterval(() => {
+  const cached = vscode.getState() as DashboardSnapshot | null;
+  if (cached) render(cached);
+}, 30_000);
+
 function render(s: DashboardSnapshot): void {
   if (!s.hasKey) {
     root.innerHTML = `
@@ -141,16 +153,17 @@ function bar(
   w: DashboardSnapshot['perModel'][number]['interval'],
   thresholds: { warning: number; error: number },
 ): string {
-  const pct = Math.max(0, Math.min(100, w.remainingPercent));
+  const pct = Math.max(0, Math.min(100, w.usedPercent));
   const tier = tierFor(pct, thresholds);
+  const remaining = Math.max(0, Math.min(100, w.remainingPercent));
   return `
     <div class="bar-row">
       <div class="bar-label">${label} <span class="status">${escapeHtml(w.statusLabel)}</span></div>
       <div class="bar-track">
         <div class="bar-fill ${tier}" style="width: ${pct}%"></div>
-        <span class="bar-text">${pct}%</span>
+        <span class="bar-text">${pct}% used</span>
       </div>
-      <div class="bar-meta">resets in <strong>${escapeHtml(w.remainsLabel)}</strong></div>
+      <div class="bar-meta">${remaining}% remaining · resets in <strong>${escapeHtml(w.remainsLabel)}</strong></div>
     </div>`;
 }
 

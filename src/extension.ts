@@ -42,8 +42,8 @@ export function activate(context: ExtensionContext): void {
   const mode = readConfigEnum<StatusBarMode>('statusBarDisplayMode', ['compact', 'split'], 'compact');
   const refreshSeconds = readConfigNumber('refreshIntervalSeconds', 60);
   const historyLimit = readConfigNumber('historySampleLimit', 100);
-  const warning = readConfigNumber('warningThreshold', 30);
-  const error = readConfigNumber('errorThreshold', 10);
+  const warning = readConfigNumber('warningThreshold', 70);
+  const error = readConfigNumber('errorThreshold', 90);
   const region: RegionKey = 'global';
 
   // 4. Quota service.
@@ -134,8 +134,8 @@ function applyConfigChange(e: ConfigurationChangeEvent): void {
     e.affectsConfiguration(`${CONFIG_PREFIX}.warningThreshold`) ||
     e.affectsConfiguration(`${CONFIG_PREFIX}.errorThreshold`)
   ) {
-    const w = readConfigNumber('warningThreshold', 30);
-    const err = readConfigNumber('errorThreshold', 10);
+    const w = readConfigNumber('warningThreshold', 70);
+    const err = readConfigNumber('errorThreshold', 90);
     treeView.setThresholds(w, err);
     statusBar.setMode(readConfigEnum<StatusBarMode>('statusBarDisplayMode', ['compact', 'split'], 'compact'));
     // Re-render by triggering a refresh.

@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   formatDuration,
   formatLocalTime,
   formatLocalDateTime,
   formatPercent,
   clampPercent,
+  liveRemainsMs,
 } from '../utils/time.js';
 
 describe('time utils', () => {
@@ -89,6 +90,32 @@ describe('time utils', () => {
       expect(clampPercent(0)).toBe(0);
       expect(clampPercent(50)).toBe(50);
       expect(clampPercent(101)).toBe(100);
+    });
+  });
+
+  describe('liveRemainsMs', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('returns undefined for undefined / invalid endTime', () => {
+      expect(liveRemainsMs(undefined)).toBeUndefined();
+      expect(liveRemainsMs(0)).toBeUndefined();
+      expect(liveRemainsMs(-1)).toBeUndefined();
+      expect(liveRemainsMs(Number.NaN)).toBeUndefined();
+    });
+
+    it('returns 0 when endTime is in the past', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-25T12:00:00Z'));
+      expect(liveRemainsMs(Date.UTC(2026, 5, 25, 11, 0, 0))).toBe(0);
+    });
+
+    it('returns ms until endTime', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-06-25T12:00:00Z'));
+      const end = Date.UTC(2026, 5, 25, 13, 30, 0); // 1h30m ahead
+      expect(liveRemainsMs(end)).toBe(90 * 60 * 1000);
     });
   });
 });

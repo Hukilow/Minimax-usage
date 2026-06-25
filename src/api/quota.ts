@@ -9,6 +9,7 @@ import type {
 import { RingBuffer } from '../utils/ringBuffer.js';
 import type { Logger } from '../utils/logger.js';
 import type { RegionKey } from '../utils/regions.js';
+import { liveRemainsMs } from '../utils/time.js';
 
 export interface QuotaServiceOptions {
   /** Region key (must be enabled). */
@@ -269,11 +270,21 @@ function normalizeWindow(input: {
   }
   // Clamp display to [0, 999] so a bad upstream value can't blow out the UI.
   const remainingPercent = Math.max(0, Math.min(999, Math.round(raw)));
+  // `used` is the natural read of "how much of the window have I burned".
+  // Display layer compares against thresholds in these terms.
+  const usedPercent = Math.max(0, Math.min(100, 100 - remainingPercent));
+
+  // Prefer computing the countdown from endTime (epoch ms, unit-agnostic).
+  // Fall back to the server-provided remainsMs if endTime is missing/invalid.
+  const live = liveRemainsMs(input.endTime);
+  const remainsMs = live !== undefined ? live : input.remainsMs;
+
   return {
     remainingPercent,
+    usedPercent,
     status,
     endTime: input.endTime,
-    remainsMs: input.remainsMs,
+    remainsMs,
     rawPercent: input.remainingPercent,
     boostPermille: input.boostPermille,
   };
@@ -284,11 +295,11 @@ function buildSample(timestamp: number, models: NormalizedModelQuota[]): QuotaSa
   for (const m of models) {
     perModel[m.model_name] = {
       interval: {
-        remainingPercent: m.interval.remainingPercent,
+        usedPercent: m.interval.usedPercent,
         status: m.interval.status,
       },
       weekly: {
-        remainingPercent: m.weekly.remainingPercent,
+        usedPercent: m.weekly.usedPercent,
         status: m.weekly.status,
       },
     };

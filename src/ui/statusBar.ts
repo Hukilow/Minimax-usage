@@ -2,7 +2,7 @@ import type { ExtensionContext, StatusBarItem, Command } from 'vscode';
 import { StatusBarAlignment, ThemeColor, window } from 'vscode';
 import type { QuotaState } from '../api/quota.js';
 import { QuotaStatus } from '../api/types.js';
-import { formatDuration, formatLocalTime, formatPercent } from '../utils/time.js';
+import { formatDuration, formatLocalTime, formatPercent, liveRemainsMs } from '../utils/time.js';
 
 export type StatusBarMode = 'compact' | 'split';
 
@@ -90,18 +90,18 @@ export class StatusBar {
       return;
     }
 
-    // Aggregate across models (worst-case remaining %).
+    // Aggregate across models (worst-case used %).
     const agg = aggregate(state.perModel);
 
     // 5h item
     this.item5h.text = this.formatLine('$(pulse) 5h', agg.interval);
     this.item5h.tooltip = this.tooltipFor('5-hour window', agg.interval, state);
-    this.applyTierStyle(this.item5h, agg.interval, this.opts.warningThreshold, this.opts.errorThreshold);
+    this.applyTierStyle(this.item5h, agg.interval.usedPercent, agg.interval.status, this.opts.warningThreshold, this.opts.errorThreshold);
 
     // Weekly item
     this.itemWk.text = this.formatLine('$(history) Wk', agg.weekly);
     this.itemWk.tooltip = this.tooltipFor('Weekly window', agg.weekly, state);
-    this.applyTierStyle(this.itemWk, agg.weekly, this.opts.warningThreshold, this.opts.errorThreshold);
+    this.applyTierStyle(this.itemWk, agg.weekly.usedPercent, agg.weekly.status, this.opts.warningThreshold, this.opts.errorThreshold);
   }
 
   dispose(): void {
@@ -111,26 +111,28 @@ export class StatusBar {
 
   // --- formatting ----------------------------------------------------------
 
-  private formatLine(prefix: string, w: { remainingPercent: number; status: number; remainsMs?: number }): string {
-    const pct = formatPercent(w.remainingPercent);
-    const tier = dots(w.remainingPercent);
-    if (this.mode === 'split' && w.remainsMs && w.remainsMs > 0) {
-      const cd = formatDuration(w.remainsMs);
-      return `${prefix} ${tier} ${pct} $(clock) ${cd}`;
+  private formatLine(prefix: string, w: { usedPercent: number; remainingPercent: number; status: number; endTime?: number; remainsMs?: number }): string {
+    const pct = formatPercent(w.usedPercent);
+    const tier = dots(w.usedPercent);
+    const cd = liveRemainsMs(w.endTime);
+    if (this.mode === 'split' && cd && cd > 0) {
+      return `${prefix} ${tier} ${pct} $(clock) ${formatDuration(cd)}`;
     }
     return `${prefix} ${tier} ${pct}`;
   }
 
-  private tooltipFor(label: string, w: { remainingPercent: number; status: number; endTime?: number; remainsMs?: number }, state: QuotaState): string {
-    const pct = formatPercent(w.remainingPercent);
+  private tooltipFor(label: string, w: { usedPercent: number; remainingPercent: number; status: number; endTime?: number; remainsMs?: number }, state: QuotaState): string {
+    const used = formatPercent(w.usedPercent);
+    const remaining = formatPercent(w.remainingPercent);
     const status = describeStatus(w.status);
     const end = w.endTime ? formatLocalTime(w.endTime) : '—';
-    const cd = w.remainsMs && w.remainsMs > 0 ? formatDuration(w.remainsMs) : '—';
+    const cd = liveRemainsMs(w.endTime);
+    const cdStr = cd && cd > 0 ? formatDuration(cd) : '—';
     const lastOk = state.lastSuccessAt ? new Date(state.lastSuccessAt).toLocaleString() : 'never';
     return [
       `MiniMax Usage — ${label}`,
-      `Remaining: ${pct}   (${status})`,
-      `Resets at: ${end}  (in ${cd})`,
+      `Used: ${used}   (${remaining} remaining, ${status})`,
+      `Resets at: ${end}  (in ${cdStr})`,
       `Last fetch: ${lastOk}`,
     ].join('\n');
   }
@@ -145,26 +147,28 @@ export class StatusBar {
 
   private applyTierStyle(
     item: StatusBarItem,
-    w: { remainingPercent: number; status: number },
+    usedPercent: number,
+    status: number,
     warn: number,
     err: number,
   ): void {
     item.color = undefined;
     item.backgroundColor = undefined;
 
-    if (w.status === QuotaStatus.Exhausted) {
+    if (status === QuotaStatus.Exhausted) {
       item.backgroundColor = new ThemeColor('statusBarItem.errorBackground');
       item.color = new ThemeColor('statusBarItem.errorForeground');
       return;
     }
-    if (w.status === QuotaStatus.Unlimited) {
+    if (status === QuotaStatus.Unlimited) {
       // No decoration; the icon will be overridden below.
       return;
     }
-    if (w.remainingPercent < err) {
+    // Thresholds are expressed in "used %" terms (warn at X% used, error at Y% used).
+    if (usedPercent >= err) {
       item.backgroundColor = new ThemeColor('statusBarItem.errorBackground');
       item.color = new ThemeColor('statusBarItem.errorForeground');
-    } else if (w.remainingPercent < warn) {
+    } else if (usedPercent >= warn) {
       item.backgroundColor = new ThemeColor('statusBarItem.warningBackground');
       item.color = new ThemeColor('statusBarItem.warningForeground');
     }
@@ -174,40 +178,42 @@ export class StatusBar {
 // ---- pure helpers (kept here so they're easy to test) ---------------------
 
 function aggregate(perModel: NonNullable<QuotaState['perModel']>) {
-  // Worst-case (lowest remaining) across all models. Status is the "most
+  // Worst-case (highest usage) across all models. Status is the "most
   // severe" — exhausted wins, then limited, then unlimited.
-  let intervalPct = 100;
-  let weeklyPct = 100;
+  let intervalUsed = 0;
+  let weeklyUsed = 0;
+  let intervalRemaining = 100;
+  let weeklyRemaining = 100;
   let intervalStatus: number = QuotaStatus.Unlimited;
   let weeklyStatus: number = QuotaStatus.Unlimited;
   let intervalEnd: number | undefined;
-  let intervalRemains: number | undefined;
   let weeklyEnd: number | undefined;
-  let weeklyRemains: number | undefined;
 
   for (const m of perModel) {
-    intervalPct = Math.min(intervalPct, m.interval.remainingPercent);
-    weeklyPct = Math.min(weeklyPct, m.weekly.remainingPercent);
+    intervalUsed = Math.max(intervalUsed, m.interval.usedPercent);
+    weeklyUsed = Math.max(weeklyUsed, m.weekly.usedPercent);
+    intervalRemaining = Math.min(intervalRemaining, m.interval.remainingPercent);
+    weeklyRemaining = Math.min(weeklyRemaining, m.weekly.remainingPercent);
     intervalStatus = worse(intervalStatus, m.interval.status);
     weeklyStatus = worse(weeklyStatus, m.weekly.status);
     if (m.interval.endTime !== undefined) intervalEnd = m.interval.endTime;
-    if (m.interval.remainsMs !== undefined) intervalRemains = m.interval.remainsMs;
     if (m.weekly.endTime !== undefined) weeklyEnd = m.weekly.endTime;
-    if (m.weekly.remainsMs !== undefined) weeklyRemains = m.weekly.remainsMs;
   }
 
   return {
     interval: {
-      remainingPercent: intervalPct,
+      usedPercent: intervalUsed,
+      remainingPercent: intervalRemaining,
       status: intervalStatus,
       endTime: intervalEnd,
-      remainsMs: intervalRemains,
+      remainsMs: liveRemainsMs(intervalEnd),
     },
     weekly: {
-      remainingPercent: weeklyPct,
+      usedPercent: weeklyUsed,
+      remainingPercent: weeklyRemaining,
       status: weeklyStatus,
       endTime: weeklyEnd,
-      remainsMs: weeklyRemains,
+      remainsMs: liveRemainsMs(weeklyEnd),
     },
   };
 }
@@ -230,7 +236,7 @@ function describeStatus(s: number): string {
 }
 
 function dots(percent: number): string {
-  // 5-dot sparkline, filled proportional to remaining %.
+  // 5-dot sparkline, filled proportional to usage.
   const filled = Math.round((Math.max(0, Math.min(100, percent)) / 100) * 5);
   return '●'.repeat(filled) + '○'.repeat(5 - filled);
 }

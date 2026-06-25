@@ -7,12 +7,28 @@
 
 ---
 
+## 📸 Screenshots
+
+### Status bar (bottom-right)
+![Status bar](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/status-bar.png)
+
+### Sidebar
+![Sidebar](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/sidebar.png)
+
+### Detail dashboard
+![Dashboard](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/dashboard.png)
+
+### Settings
+![Settings](https://raw.githubusercontent.com/Hukilow/minimax-usage/main/docs/screenshots/settings.png)
+
+---
+
 ## ✨ Features
 
-- **Status bar (bottom-right):** live 5-hour and weekly remaining %, color-coded (green / yellow / red), with reset countdowns on hover.
+- **Status bar (bottom-right):** live 5-hour and weekly **used %**, color-coded (green / yellow / red), with reset countdowns on hover.
 - **Sidebar view:** per-model rows (`general`, `video`, …) with quick access to refresh / dashboard / billing.
-- **Detail dashboard:** big usage bars, reset countdowns, **historical chart** (uPlot, zero dependencies).
-- **Command palette:** `MiniMax Usage: Set API Key`, `Refresh Now`, `Open Usage Dashboard`, `Open Billing Page`, ….
+- **Detail dashboard:** big usage bars, reset countdowns, **historical chart** of usage over time, auto-refreshing live countdowns.
+- **Command palette:** `MiniMax Usage: Set API Key`, `Refresh Now`, `Open Usage Dashboard`, `Open Billing Page`, …
 - **Private by design:** API key in OS keychain (`SecretStorage`); no telemetry, no analytics, **zero runtime npm dependencies**.
 
 ---
@@ -28,37 +44,14 @@
 
 ---
 
-## 🖥️ Preview
-
-### Status bar
-```
-$(pulse)  5h ●●●○○ 10%   $(history)  Wk ●●●●○ 69%
-```
-
-### Sidebar
-```
-Minimax Usage
-├── general
-│   ├── 5h    10%   resets in 2h 14m
-│   └── Wk    69%   resets in 4d 17h
-└── video
-    ├── 5h   100%
-    └── Wk   100%
-```
-
-### Detail dashboard
-Big bars, reset countdowns, and a history chart of 5h + weekly usage over time.
-
----
-
 ## ⚙️ Settings
 
 | Setting | Default | Description |
 |---|---|---|
 | `minimaxUsage.refreshIntervalSeconds` | `60` | Polling interval (30–600s). |
 | `minimaxUsage.statusBarDisplayMode` | `compact` | `compact` (two panels) or `split` (inline countdown). |
-| `minimaxUsage.warningThreshold` | `30` | Yellow tier (remaining %). |
-| `minimaxUsage.errorThreshold` | `10` | Red tier (remaining %). |
+| `minimaxUsage.warningThreshold` | `70` | Used-% at which the status bar turns yellow. |
+| `minimaxUsage.errorThreshold` | `90` | Used-% at which the status bar turns red. |
 | `minimaxUsage.historySampleLimit` | `100` | History ring-buffer size. |
 | `minimaxUsage.showSidebar` | `true` | Show sidebar container. |
 | `minimaxUsage.debug` | `false` | Verbose logs in Output channel. |
@@ -98,6 +91,22 @@ npm run watch            # in one terminal
 | `npm test` | Vitest unit tests. |
 | `npm run package` | Build + bundle + `vsce package` (produces `.vsix`). |
 
+### Regenerating screenshots
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\make-screenshots.ps1
+```
+
+This rebuilds the four PNGs in `docs/screenshots/` (status-bar, sidebar, dashboard, settings). Replace them with real captures of the running extension when you have a clean setup.
+
+### Replacing the icon
+
+The Marketplace accepts PNG, JPG, GIF, BMP for the gallery image. The webview tab icon (used by `WebviewPanel.iconPath`) is stricter and only accepts **PNG**.
+
+- Drop your replacement at `media/icon.jpg` (any size).
+- Run `powershell -ExecutionPolicy Bypass -File scripts\convert-icon.ps1` — it produces a 128×128 `media/icon.png` (centered square crop + resize).
+- Re-run `npm run package` to see the new icon in the packaged `.vsix`.
+
 ### Project layout
 
 ```
@@ -116,52 +125,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.
 
 ---
 
-## 🗺️ Roadmap (v1.1+)
-
-- Notification on threshold crossing.
-- Multi-team / multi-account switching.
-- Optional pay-as-you-go Open Platform key.
-- CN region (`api.MiniMax.cn`).
-- Publish to Open VSX.
-
----
-
-## � Publishing to the VS Code Marketplace
-
-The release workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml) builds, signs, and publishes the extension whenever a `v*` tag is pushed.
-
-To enable automatic publishing:
-
-1. **Get a Marketplace token** from Azure DevOps:
-   [User settings → Personal access tokens](https://dev.azure.com/_usersSettings/tokens) → **+ New Token**.
-   - **Scopes:** Custom defined → **Marketplace** → **Manage**.
-   - **Expiration:** 90 days (rotate before expiry).
-2. **Add it as a repository secret** on GitHub:
-   - Go to your repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
-   - **Name:** `VSCE_PAT`
-   - **Value:** the token from step 1.
-3. **Cut a release** (see the [release-manager agent](.github/agents/release-manager.agent.md) / `cut-release` prompt for the full checklist):
-   ```bash
-   npm version patch   # or minor / major
-   git push --follow-tags
-   ```
-4. Watch the **Actions** tab. The workflow will:
-   - build + package the `.vsix`
-   - run `vsce publish` (using `VSCE_PAT`)
-   - create a GitHub release with the `.vsix` attached
-
-> If `VSCE_PAT` is not set, the publish step is skipped with a friendly notice and the GitHub release still runs.
-
-### Replacing the icon
-
-The Marketplace accepts PNG, JPG, GIF, BMP for the gallery image. The webview tab icon (used by `WebviewPanel.iconPath`) is stricter and only accepts **PNG**.
-
-- Drop your replacement at `media/icon.jpg` (any size).
-- Run `powershell -ExecutionPolicy Bypass -File scripts/convert-icon.ps1` — it produces a 128×128 `media/icon.png` (centered square crop + resize).
-- Re-run `npm run package` to see the new icon in the packaged `.vsix`.
-
----
-
-## �📄 License
+## 📄 License
 
 [MIT](LICENSE) © 2026 Hukilow

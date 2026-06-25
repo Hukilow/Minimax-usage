@@ -4,6 +4,7 @@
   "description": "Show your MiniMax Token Plan quota (5-hour and weekly) in the VS Code status bar, sidebar, and a detail dashboard.",
   "version": "0.1.0",
   "publisher": "Hukilow",
+  "icon": "media/icon.png",
   "license": "MIT",
   "engines": {
     "vscode": "^1.96.0"
@@ -97,15 +98,15 @@
           "type": "number",
           "minimum": 1,
           "maximum": 100,
-          "default": 30,
-          "description": "Remaining-% at which the status bar turns yellow."
+          "default": 70,
+          "description": "Used-% at which the status bar turns yellow."
         },
         "minimaxUsage.errorThreshold": {
           "type": "number",
           "minimum": 1,
           "maximum": 100,
-          "default": 10,
-          "description": "Remaining-% at which the status bar turns red and shows an alert icon."
+          "default": 90,
+          "description": "Used-% at which the status bar turns red and shows an alert icon."
         },
         "minimaxUsage.historySampleLimit": {
           "type": "number",

@@ -86,12 +86,14 @@ export interface NormalizedModelQuota {
 }
 
 export interface NormalizedWindow {
-  /** 0..100 (or higher with boost). Clamped to [0, 999] for display. */
+  /** Server-claimed remaining percent (0..100, may exceed 100 with boost). */
   remainingPercent: number;
+  /** Inverse: percent of the window already consumed, clamped to [0, 100]. */
+  usedPercent: number;
   status: QuotaStatus;
-  /** Server-claimed end timestamp (ms since epoch). */
+  /** Server-claimed end timestamp (ms since epoch). Used to compute the live countdown. */
   endTime?: number;
-  /** Server-claimed countdown (ms). */
+  /** Snapshot of the countdown (ms) at fetch time. Display code should prefer `liveRemainsMs(endTime)`. */
   remainsMs?: number;
   /** Raw server value (kept for debugging). */
   rawPercent?: number;
@@ -104,7 +106,7 @@ export interface QuotaSample {
   /** ms since epoch when the sample was taken. */
   timestamp: number;
   perModel: Record<string, {
-    interval: { remainingPercent: number; status: number };
-    weekly: { remainingPercent: number; status: number };
+    interval: { usedPercent: number; status: number };
+    weekly: { usedPercent: number; status: number };
   }>;
 }

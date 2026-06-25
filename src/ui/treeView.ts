@@ -10,7 +10,7 @@ import {
 import type { QuotaState } from '../api/quota.js';
 import type { NormalizedModelQuota, NormalizedWindow} from '../api/types.js';
 import { QuotaStatus } from '../api/types.js';
-import { formatDuration, formatLocalTime, formatPercent } from '../utils/time.js';
+import { formatDuration, formatLocalTime, formatPercent, liveRemainsMs } from '../utils/time.js';
 
 /** A node in the TreeView. Discriminated union for type-safety. */
 export type TreeNode =
@@ -47,8 +47,8 @@ export class QuotaTreeProvider implements TreeDataProvider<TreeNode> {
   private readonly emitter = new EventEmitter<TreeNode | undefined | null | void>();
   readonly onDidChangeTreeData = this.emitter.event;
   private state: QuotaState = { perModel: null, hasKey: false, history: [], inFlight: false };
-  private warningThreshold = 30;
-  private errorThreshold = 10;
+  private warningThreshold = 70;
+  private errorThreshold = 90;
 
   setThresholds(warning: number, error: number): void {
     this.warningThreshold = warning;
@@ -134,14 +134,15 @@ export class QuotaTreeProvider implements TreeDataProvider<TreeNode> {
 
   private renderRow(node: RowNode): TreeItem {
     const t = new TreeItem(node.label, TreeItemCollapsibleState.None);
+    const cd = liveRemainsMs(node.window.endTime);
     t.description = [
-      formatPercent(node.window.remainingPercent),
+      formatPercent(node.window.usedPercent),
       '•',
-      `resets in ${node.window.remainsMs && node.window.remainsMs > 0 ? formatDuration(node.window.remainsMs) : '—'}`,
+      `resets in ${cd && cd > 0 ? formatDuration(cd) : '—'}`,
     ].join(' ');
     t.tooltip = [
       `${node.parent} — ${node.label}`,
-      `Remaining: ${formatPercent(node.window.remainingPercent)}`,
+      `Used: ${formatPercent(node.window.usedPercent)}   (${formatPercent(node.window.remainingPercent)} remaining)`,
       `Resets at: ${node.window.endTime ? formatLocalTime(node.window.endTime) : '—'}`,
     ].join('\n');
     t.iconPath = rowIcon(node.window);
@@ -162,33 +163,36 @@ function iconFor(m: NormalizedModelQuota, warn: number, err: number): ThemeIcon 
   if (m.interval.status === QuotaStatus.Exhausted || m.weekly.status === QuotaStatus.Exhausted) {
     return new ThemeIcon('error');
   }
-  const min = Math.min(m.interval.remainingPercent, m.weekly.remainingPercent);
-  if (min < err) return new ThemeIcon('alert');
-  if (min < warn) return new ThemeIcon('warning');
+  const max = Math.max(m.interval.usedPercent, m.weekly.usedPercent);
+  if (max >= err) return new ThemeIcon('alert');
+  if (max >= warn) return new ThemeIcon('warning');
   return new ThemeIcon('pulse');
 }
 
 function rowIcon(w: NormalizedWindow): ThemeIcon {
   if (w.status === QuotaStatus.Exhausted) return new ThemeIcon('error');
   if (w.status === QuotaStatus.Unlimited) return new ThemeIcon('infinity');
-  if (w.remainingPercent < 10) return new ThemeIcon('alert');
-  if (w.remainingPercent < 30) return new ThemeIcon('warning');
+  if (w.usedPercent >= 90) return new ThemeIcon('alert');
+  if (w.usedPercent >= 70) return new ThemeIcon('warning');
   return new ThemeIcon('circle-filled');
 }
 
 function describeHeadline(m: NormalizedModelQuota): string {
   return [
-    `5h ${formatPercent(m.interval.remainingPercent)}`,
-    `Wk ${formatPercent(m.weekly.remainingPercent)}`,
+    `5h ${formatPercent(m.interval.usedPercent)}`,
+    `Wk ${formatPercent(m.weekly.usedPercent)}`,
   ].join('   •   ');
 }
 
 function tooltipFor(m: NormalizedModelQuota): string {
-  const cd = (ms: number | undefined) => (ms && ms > 0 ? formatDuration(ms) : '—');
+  const cd = (end: number | undefined) => {
+    const ms = liveRemainsMs(end);
+    return ms && ms > 0 ? formatDuration(ms) : '—';
+  };
   return [
     `Model: ${m.model_name}`,
-    `5-hour: ${formatPercent(m.interval.remainingPercent)}  (resets in ${cd(m.interval.remainsMs)})`,
-    `Weekly: ${formatPercent(m.weekly.remainingPercent)}  (resets in ${cd(m.weekly.remainsMs)})`,
+    `5-hour: ${formatPercent(m.interval.usedPercent)} used  (resets in ${cd(m.interval.endTime)})`,
+    `Weekly: ${formatPercent(m.weekly.usedPercent)} used  (resets in ${cd(m.weekly.endTime)})`,
   ].join('\n');
 }
 

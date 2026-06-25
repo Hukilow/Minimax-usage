@@ -63,3 +63,13 @@ export function clampPercent(p: number | undefined): number {
   if (p === undefined || !Number.isFinite(p)) return 0;
   return Math.max(0, Math.min(100, Math.round(p)));
 }
+
+/**
+ * Returns the live ms-until-reset for a window. The server-provided
+ * `remains_time` can be stale (we poll every 60s) or in a different unit;
+ * computing from `endTime - now` is unit-agnostic and ticks every render.
+ */
+export function liveRemainsMs(endTime: number | undefined): number | undefined {
+  if (endTime === undefined || !Number.isFinite(endTime) || endTime <= 0) return undefined;
+  return Math.max(0, endTime - Date.now());
+}
