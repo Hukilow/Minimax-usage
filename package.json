@@ -2,7 +2,7 @@
   "name": "minimax-usage",
   "displayName": "MiniMax Usage",
   "description": "Show your MiniMax Token Plan quota (5-hour and weekly) in the VS Code status bar and a detail dashboard with a usage history chart.",
-  "version": "0.3.1",
+  "version": "1.0.0",
   "publisher": "Hukilow",
   "icon": "media/icon.png",
   "license": "MIT",
@@ -61,8 +61,13 @@
         "category": "Minimax Usage"
       },
       {
-        "command": "minimaxUsage.toggleStatusBar",
-        "title": "MiniMax Usage: Toggle Status Bar",
+        "command": "minimaxUsage.toggleStatusBarCountdown",
+        "title": "Minimax Usage: Toggle Countdown in Status Bar",
+        "category": "Minimax Usage"
+      },
+      {
+        "command": "minimaxUsage.clearHistory",
+        "title": "Minimax Usage: Clear History",
         "category": "Minimax Usage"
       }
     ],
@@ -76,18 +81,10 @@
           "default": 60,
           "description": "How often (seconds) to poll the MiniMax Token Plan API."
         },
-        "minimaxUsage.statusBarDisplayMode": {
-          "type": "string",
-          "enum": [
-            "compact",
-            "split"
-          ],
-          "enumDescriptions": [
-            "Two compact panels with no inline countdown (default).",
-            "Single combined panel with inline reset countdown."
-          ],
-          "default": "compact",
-          "description": "Status bar shape."
+        "minimaxUsage.statusBar.showCountdown": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the live reset countdown (e.g. '2h 14m') inline next to the 5h and Weekly status bar items."
         },
         "minimaxUsage.warningThreshold": {
           "type": "number",
@@ -108,7 +105,33 @@
           "minimum": 20,
           "maximum": 2000,
           "default": 100,
-          "description": "Maximum number of historical samples to retain for charts."
+          "description": "Maximum number of historical samples to retain for charts. Hard ceiling — older samples are downsampled so the on-disk history stays bounded."
+        },
+        "minimaxUsage.charts.timeRange": {
+          "type": "string",
+          "enum": [
+            "1h",
+            "6h",
+            "24h",
+            "3d",
+            "7d",
+            "all"
+          ],
+          "enumDescriptions": [
+            "Last hour (fine detail).",
+            "Last 6 hours.",
+            "Last 24 hours (default).",
+            "Last 3 days.",
+            "Last 7 days.",
+            "Everything in the local history buffer."
+          ],
+          "default": "24h",
+          "description": "Default time range shown when the dashboard opens."
+        },
+        "minimaxUsage.charts.persistHistory": {
+          "type": "boolean",
+          "default": true,
+          "description": "Keep chart history across VS Code restarts. Disable to clear stored history and stop writing new samples."
         },
         "minimaxUsage.debug": {
           "type": "boolean",
@@ -119,14 +142,7 @@
     },
     "viewsContainers": {},
     "views": {},
-    "menus": {
-      "commandPalette": [
-        {
-          "command": "minimaxUsage.toggleStatusBar",
-          "when": "false"
-        }
-      ]
-    }
+    "menus": {}
   },
   "scripts": {
     "build": "node esbuild.config.mjs",

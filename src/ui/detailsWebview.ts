@@ -1,5 +1,5 @@
 import type { ExtensionContext, Webview, WebviewPanel, Disposable } from 'vscode';
-import { Uri, ViewColumn, window } from 'vscode';
+import { Uri, ViewColumn, window, workspace } from 'vscode';
 import type { QuotaState } from '../api/quota.js';
 import { QuotaStatus } from '../api/types.js';
 import { Regions } from '../utils/regions.js';
@@ -11,7 +11,33 @@ export interface DetailsWebviewCallbacks {
   onOpenBilling: () => void;
   /** Triggered when the webview asks to set the API key. */
   onSetApiKey: () => void;
+  /** Triggered when the webview asks to wipe stored + in-memory history. */
+  onClearHistory: () => void;
 }
+
+const CONFIG_PREFIX = 'minimaxUsage';
+
+/** Allowed keys for `setChartOption` messages (relative to CONFIG_PREFIX).
+ *  Per-series toggles were removed: the `video` group is hidden entirely
+ *  (filtered in the serializer) and the `general` line is the only one
+ *  ever shown, so there is nothing left to toggle. `timeRange` remains
+ *  the sole user-controllable chart setting. */
+export type ChartOptionKey =
+  | 'charts.timeRange';
+
+/** Subset of the dashboard snapshot that the webview reads from settings. */
+export interface DashboardChartSettings {
+  timeRange: '1h' | '6h' | '24h' | '3d' | '7d' | 'all';
+}
+
+const ALLOWED_TIME_RANGES: readonly DashboardChartSettings['timeRange'][] = [
+  '1h',
+  '6h',
+  '24h',
+  '3d',
+  '7d',
+  'all',
+];
 
 /**
  * Hosts the detail webview. Renders the HTML, locks down the CSP, and pipes
@@ -53,7 +79,7 @@ export class DetailsWebview {
 
     // Wire message handler.
     this.panel.webview.onDidReceiveMessage(
-      (msg: { type: string; payload?: unknown }) => {
+      (msg: { type: string; key?: string; value?: unknown }) => {
         switch (msg.type) {
           case 'ready':
             if (this.state) this.postState();
@@ -66,6 +92,14 @@ export class DetailsWebview {
             break;
           case 'setApiKey':
             this.callbacks.onSetApiKey();
+            break;
+          case 'clearHistory':
+            this.callbacks.onClearHistory();
+            break;
+          case 'setChartOption':
+            if (typeof msg.key === 'string') {
+              this.applyChartOption(msg.key as ChartOptionKey, msg.value);
+            }
             break;
         }
       },
@@ -82,6 +116,15 @@ export class DetailsWebview {
     if (this.panel) this.postState();
   }
 
+  /**
+   * Pushes the latest snapshot (current quota state + chart settings) to the
+   * webview. Called after `setChartOption` so the webview stays in sync with
+   * settings changes regardless of who initiated them.
+   */
+  refreshSettings(): void {
+    if (this.panel) this.postState();
+  }
+
   dispose(): void {
     if (this.panel) {
       this.panel.dispose();
@@ -93,11 +136,37 @@ export class DetailsWebview {
 
   // --- internals -----------------------------------------------------------
 
+  /**
+   * Validates and persists a single chart option, then pushes a fresh
+   * snapshot so the webview re-renders with the authoritative value.
+   * Defensive: unknown keys / out-of-range enums are rejected silently.
+   */
+  private applyChartOption(key: ChartOptionKey, raw: unknown): void {
+    const cfg = workspace.getConfiguration(CONFIG_PREFIX);
+    switch (key) {
+      case 'charts.timeRange': {
+        if (typeof raw !== 'string' || !ALLOWED_TIME_RANGES.includes(raw as DashboardChartSettings['timeRange'])) return;
+        void cfg.update(key, raw, true);
+        return;
+      }
+    }
+  }
+
+  /** Reads the current chart settings from the user's configuration. */
+  private readChartSettings(): DashboardChartSettings {
+    const cfg = workspace.getConfiguration(CONFIG_PREFIX);
+    const timeRangeRaw = cfg.get<string>('charts.timeRange', '24h');
+    const timeRange = (ALLOWED_TIME_RANGES as readonly string[]).includes(timeRangeRaw)
+      ? (timeRangeRaw as DashboardChartSettings['timeRange'])
+      : '24h';
+    return { timeRange };
+  }
+
   private postState(): void {
     if (!this.panel || !this.state) return;
     void this.panel.webview.postMessage({
       type: 'state',
-      payload: serializeState(this.state),
+      payload: serializeState(this.state, this.readChartSettings()),
     });
   }
 
@@ -180,16 +249,25 @@ export interface DashboardSnapshot {
   };
   region: { key: string; label: string; billingUrl: string };
   thresholds: { warning: number; error: number };
+  chartSettings: DashboardChartSettings;
 }
 
-function serializeState(state: QuotaState): DashboardSnapshot {
+/** Models hidden from the dashboard UI. The `video` group is effectively
+ *  unlimited for code-completion users (the audience for this extension);
+ *  the API response is still fetched and persisted for transparency, but
+ *  the dashboard filters it out. To unhide a model, drop it from this list. */
+const HIDDEN_MODELS = new Set<string>(['video']);
+
+function serializeState(state: QuotaState, chartSettings: DashboardChartSettings): DashboardSnapshot {
   const formatTime = (ms?: number) => (ms ? new Date(ms).toISOString() : undefined);
 
-  const perModel = (state.perModel ?? []).map((m) => ({
-    model_name: m.model_name,
-    interval: serializeWindow(m.interval.usedPercent, m.interval.remainingPercent, m.interval.status, m.interval.endTime),
-    weekly: serializeWindow(m.weekly.usedPercent, m.weekly.remainingPercent, m.weekly.status, m.weekly.endTime),
-  }));
+  const perModel = (state.perModel ?? [])
+    .filter((m) => !HIDDEN_MODELS.has(m.model_name))
+    .map((m) => ({
+      model_name: m.model_name,
+      interval: serializeWindow(m.interval.usedPercent, m.interval.remainingPercent, m.interval.status, m.interval.endTime),
+      weekly: serializeWindow(m.weekly.usedPercent, m.weekly.remainingPercent, m.weekly.status, m.weekly.endTime),
+    }));
 
   const history: DashboardSnapshot['history'] = {
     timestamps: state.history.map((h: { timestamp: number }) => h.timestamp),
@@ -198,6 +276,7 @@ function serializeState(state: QuotaState): DashboardSnapshot {
   const seen = new Set<string>();
   for (const sample of state.history) {
     for (const model of Object.keys(sample.perModel)) {
+      if (HIDDEN_MODELS.has(model)) continue;
       const k1 = `${model}::interval`;
       if (!seen.has(k1)) {
         seen.add(k1);
@@ -239,6 +318,7 @@ function serializeState(state: QuotaState): DashboardSnapshot {
       billingUrl: Regions.global.billingUrl,
     },
     thresholds: { warning: 70, error: 90 },
+    chartSettings,
   };
 }
 

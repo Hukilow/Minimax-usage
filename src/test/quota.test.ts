@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { QuotaService } from '../api/quota.js';
 import { Logger } from '../utils/logger.js';
 import { QuotaStatus } from '../api/types.js';
+import { QuotaHistoryStore, serialize, type HistoryPersistence } from '../api/historyStore.js';
+import type { QuotaSample } from '../api/types.js';
 
 function silentLogger(): Logger {
   const appendLine = () => {};
@@ -183,6 +185,195 @@ describe('QuotaService', () => {
         await svc.refreshNow();
       }
       expect(svc.getState().history.length).toBeLessThanOrEqual(5);
+      svc.dispose();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('restores history from the persistent store on construction', () => {
+    const prior: QuotaSample[] = [
+      {
+        timestamp: Date.now() - 5 * 60_000,
+        perModel: {
+          general: {
+            interval: { usedPercent: 20, status: 1 },
+            weekly: { usedPercent: 30, status: 1 },
+          },
+        },
+      },
+      {
+        timestamp: Date.now() - 60_000,
+        perModel: {
+          general: {
+            interval: { usedPercent: 25, status: 1 },
+            weekly: { usedPercent: 31, status: 1 },
+          },
+        },
+      },
+    ];
+    const blob = serialize(prior, Date.now());
+    const persistence: HistoryPersistence = {
+      read: () => blob,
+      write: () => {},
+    };
+    const historyStore = new QuotaHistoryStore(persistence, { limit: 100, debounceMs: 60_000 });
+
+    const svc = new QuotaService({
+      region: 'global',
+      intervalMs: 60_000,
+      historyLimit: 100,
+      logger: silentLogger(),
+      getApiKey: async () => undefined,
+      historyStore,
+    });
+
+    expect(svc.getState().history).toHaveLength(2);
+    expect(svc.getState().history[0]!.timestamp).toBe(prior[0]!.timestamp);
+    svc.dispose();
+  });
+
+  it('schedules a persistence write after a successful fetch', async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          model_remains: [
+            {
+              model_name: 'general',
+              current_interval_remaining_percent: 90,
+              current_weekly_remaining_percent: 90,
+              current_interval_status: QuotaStatus.Limited,
+              current_weekly_status: QuotaStatus.Limited,
+            },
+          ],
+          base_resp: { status_code: 0, status_msg: 'success' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
+
+    let writtenBlob: unknown = undefined;
+    const persistence: HistoryPersistence = {
+      read: () => undefined,
+      write: (b) => { writtenBlob = b; },
+    };
+    const historyStore = new QuotaHistoryStore(persistence, { limit: 50, debounceMs: 10 });
+
+    try {
+      const svc = new QuotaService({
+        region: 'global',
+        intervalMs: 60_000,
+        historyLimit: 50,
+        logger: silentLogger(),
+        getApiKey: async () => 'sk-test',
+        historyStore,
+      });
+      await svc.refreshNow();
+      // No write yet — debounce hasn't fired.
+      expect(writtenBlob).toBeUndefined();
+      // Wait past the debounce window.
+      await new Promise((r) => setTimeout(r, 30));
+      expect(writtenBlob).toBeDefined();
+      const blob = writtenBlob as { samples: unknown[] };
+      expect(blob.samples).toHaveLength(1);
+      svc.dispose();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('flushes pending writes synchronously on dispose', async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          model_remains: [
+            {
+              model_name: 'general',
+              current_interval_remaining_percent: 80,
+              current_weekly_remaining_percent: 80,
+              current_interval_status: QuotaStatus.Limited,
+              current_weekly_status: QuotaStatus.Limited,
+            },
+          ],
+          base_resp: { status_code: 0, status_msg: 'success' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
+
+    let writes = 0;
+    const persistence: HistoryPersistence = {
+      read: () => undefined,
+      write: () => { writes++; },
+    };
+    const historyStore = new QuotaHistoryStore(persistence, { limit: 50, debounceMs: 60_000 }); // long debounce
+    try {
+      const svc = new QuotaService({
+        region: 'global',
+        intervalMs: 60_000,
+        historyLimit: 50,
+        logger: silentLogger(),
+        getApiKey: async () => 'sk-test',
+        historyStore,
+      });
+      await svc.refreshNow();
+      expect(writes).toBe(0);
+      svc.dispose(); // should flushNow() before subscribers clear
+      // Wait for the async flush to complete before asserting.
+      await new Promise((r) => setTimeout(r, 5));
+      expect(writes).toBe(1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('clearHistory() wipes both in-memory and persisted history', async () => {
+    const fetchImpl: typeof fetch = (async () =>
+      new Response(
+        JSON.stringify({
+          model_remains: [
+            {
+              model_name: 'general',
+              current_interval_remaining_percent: 70,
+              current_weekly_remaining_percent: 70,
+              current_interval_status: QuotaStatus.Limited,
+              current_weekly_status: QuotaStatus.Limited,
+            },
+          ],
+          base_resp: { status_code: 0, status_msg: 'success' },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      )) as unknown as typeof fetch;
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchImpl;
+
+    const writes: { samples: unknown[] }[] = [];
+    const persistence: HistoryPersistence = {
+      read: () => undefined,
+      write: (b) => { writes.push(b as { samples: unknown[] }); },
+    };
+    const historyStore = new QuotaHistoryStore(persistence, { limit: 50, debounceMs: 0 }); // immediate flush
+    try {
+      const svc = new QuotaService({
+        region: 'global',
+        intervalMs: 60_000,
+        historyLimit: 50,
+        logger: silentLogger(),
+        getApiKey: async () => 'sk-test',
+        historyStore,
+      });
+      await svc.refreshNow();
+      // The debounce of 0 schedules on the next tick, so await a microtask.
+      await new Promise((r) => setTimeout(r, 5));
+      expect(svc.getState().history.length).toBeGreaterThan(0);
+      svc.clearHistory();
+      await new Promise((r) => setTimeout(r, 5));
+      expect(svc.getState().history).toHaveLength(0);
+      // The most recent persisted blob must also be empty.
+      const last = writes[writes.length - 1]!;
+      expect(last.samples).toEqual([]);
       svc.dispose();
     } finally {
       globalThis.fetch = originalFetch;

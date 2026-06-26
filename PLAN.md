@@ -194,7 +194,7 @@ Full dashboard with:
 | `minimaxUsage.refresh` | `Minimax Usage: Refresh Now` | — |
 | `minimaxUsage.openDashboard` | `Minimax Usage: Open Usage Dashboard` | — |
 | `minimaxUsage.openBilling` | `Minimax Usage: Open Billing Page` | — |
-| `minimaxUsage.toggleStatusBar` | `Minimax Usage: Toggle Status Bar` | — |
+| `minimaxUsage.toggleStatusBarCountdown` | `Minimax Usage: Toggle Countdown in Status Bar` | — |
 | `minimaxUsage.toggleSidebar` | `Minimax Usage: Toggle Sidebar View` | — |
 
 ### 3.5 Settings (`minimaxUsage.*`)
@@ -202,7 +202,7 @@ Full dashboard with:
 | Key | Type | Default | Notes |
 |---|---|---|---|
 | `refreshIntervalSeconds` | number 30…600 | 60 | |
-| `statusBarDisplayMode` | enum `compact` \| `split` | `compact` | |
+| `statusBar.showCountdown` | boolean | `false` | inline `$(clock) 2h 14m` after each item |
 | `warningThreshold` | number 1…100 | 30 | yellow tier |
 | `errorThreshold` | number 1…100 | 10 | red tier |
 | `historySampleLimit` | number 20…2000 | 100 | |

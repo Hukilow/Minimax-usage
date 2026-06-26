@@ -10,6 +10,8 @@ import { RingBuffer } from '../utils/ringBuffer.js';
 import type { Logger } from '../utils/logger.js';
 import type { RegionKey } from '../utils/regions.js';
 import { liveRemainsMs } from '../utils/time.js';
+import { downsample } from './historyStore.js';
+import type { QuotaHistoryStore } from './historyStore.js';
 
 export interface QuotaServiceOptions {
   /** Region key (must be enabled). */
@@ -22,6 +24,11 @@ export interface QuotaServiceOptions {
   logger: Logger;
   /** Function that returns the current API key (called on every poll). */
   getApiKey: () => Promise<string | undefined>;
+  /**
+   * Optional persistent store. When provided, samples are mirrored to
+   * storage so they survive extension restarts. Skipped in unit tests.
+   */
+  historyStore?: QuotaHistoryStore;
 }
 
 /** State observable by the UI. */
@@ -70,6 +77,17 @@ export class QuotaService {
       history: [],
       inFlight: false,
     };
+    // Load any persisted samples. Downsample first so we never blow past
+    // `historyLimit` if the stored blob is larger (e.g. user lowered the
+    // limit between sessions).
+    if (opts.historyStore) {
+      const stored = opts.historyStore.load();
+      if (stored.length > 0) {
+        const bounded = downsample(stored, opts.historyLimit, Date.now());
+        for (const s of bounded) this.history.push(s);
+        opts.logger.debug(`restored ${this.history.size} historical samples`);
+      }
+    }
   }
 
   /** Starts the polling loop. Idempotent. */
@@ -80,14 +98,27 @@ export class QuotaService {
     this.scheduleNext();
   }
 
-  /** Stops the polling loop and releases the timer. */
+  /** Stops the polling loop, flushes any pending history save, and releases subscribers. */
   dispose(): void {
     this.disposed = true;
     if (this.timer !== null) {
       clearTimeout(this.timer);
       this.timer = null;
     }
+    // Flush synchronously so we don't lose the last few samples when VS Code
+    // closes. `flushNow` is a no-op if nothing is pending.
+    this.opts.historyStore?.flushNow();
     this.subscribers.clear();
+  }
+
+  /**
+   * Wipes any persisted history from storage and the in-memory buffer.
+   * Subscribers are notified with an empty history.
+   */
+  clearHistory(): void {
+    this.opts.historyStore?.clear();
+    this.history.clear();
+    this.emit();
   }
 
   /** Updates the polling interval (and reschedules). */
@@ -210,6 +241,11 @@ export class QuotaService {
       lastError: undefined,
     };
     this.history.push(buildSample(now, models));
+    // Mirror to storage. The store debounces writes; we just give it the
+    // current buffer view (already bounded by the ring buffer / limit).
+    if (this.opts.historyStore) {
+      this.opts.historyStore.scheduleSave(this.history.toArray(), now);
+    }
   }
 
   private handleError(err: unknown): void {

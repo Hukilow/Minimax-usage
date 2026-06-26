@@ -5,11 +5,11 @@ import { QuotaStatus } from '../api/types.js';
 import type { NormalizedModelQuota } from '../api/types.js';
 import { formatDuration, formatLocalTime, formatPercent, liveRemainsMs } from '../utils/time.js';
 
-export type StatusBarMode = 'compact' | 'split';
-
 export interface StatusBarOptions {
-  /** Default mode if no setting is found. */
-  defaultMode?: StatusBarMode;
+  /** When true, the inline reset countdown (e.g. '2h 14m') is appended to
+   *  each status bar item. Toggled at runtime via the
+   *  `toggleStatusBarCountdown` command. */
+  showCountdown: boolean;
   /** Thresholds (0..100). */
   warningThreshold: number;
   errorThreshold: number;
@@ -22,12 +22,12 @@ export class StatusBar {
   private readonly opts: StatusBarOptions;
   private readonly item5h: StatusBarItem;
   private readonly itemWk: StatusBarItem;
-  private mode: StatusBarMode;
+  private showCountdown: boolean;
   private disposeFns: Array<() => void> = [];
 
   constructor(_ctx: ExtensionContext, opts: StatusBarOptions) {
     this.opts = opts;
-    this.mode = opts.defaultMode ?? 'compact';
+    this.showCountdown = opts.showCountdown;
 
     // High priority keeps us on the right side of the status bar; alignment
     // 'Right' places us in the bottom-right corner by default.
@@ -58,9 +58,20 @@ export class StatusBar {
     );
   }
 
-  setMode(mode: StatusBarMode): void {
-    if (this.mode === mode) return;
-    this.mode = mode;
+  /**
+   * Switches whether the inline reset countdown is rendered next to each
+   * status bar item. The next `render()` call picks it up; nothing else
+   * needs to happen because `QuotaService` re-emits a state on every poll,
+   * and `formatLine` is pure over `this.showCountdown`.
+   */
+  setShowCountdown(show: boolean): void {
+    if (this.showCountdown === show) return;
+    this.showCountdown = show;
+  }
+
+  /** Read-only accessor used by the config-change watcher / tests. */
+  getShowCountdown(): boolean {
+    return this.showCountdown;
   }
 
   /** Updates both status bar items from a QuotaState snapshot. */
@@ -127,7 +138,7 @@ export class StatusBar {
     if (cd !== undefined && maxMs !== undefined && cd > maxMs) {
       cd = maxMs;
     }
-    if (this.mode === 'split' && cd && cd > 0) {
+    if (this.showCountdown && cd && cd > 0) {
       return `${prefix} ${tier} ${pct} $(clock) ${formatDuration(cd)}`;
     }
     return `${prefix} ${tier} ${pct}`;
