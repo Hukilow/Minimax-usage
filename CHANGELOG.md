@@ -90,4 +90,3 @@ VS Code Marketplace.
 - Removed the Activity Bar sidebar container and the per-model TreeView; the dashboard is the single place to inspect quota detail.
 
 [1.0.0]: https://github.com/Hukilow/minimax-usage/releases/tag/v1.0.0
-[0.3.0]: https://github.com/Hukilow/minimax-usage/releases/tag/v0.3.0
